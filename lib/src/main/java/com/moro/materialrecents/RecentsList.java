@@ -2,24 +2,24 @@ package com.moro.materialrecents;
 
 import android.annotation.TargetApi;
 import android.content.Context;
-import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.v7.widget.CardView;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
-import android.widget.Scroller;
+import android.widget.OverScroller;
 
 /**
  * Created by Marcin on 2015-04-13.
  */
 public class RecentsList extends FrameLayout implements GestureDetector.OnGestureListener {
-  Scroller scroller;
+  OverScroller scroller;
   RecentsAdapter adapter;
   GestureDetector gestureDetector = new GestureDetector(this);
   int scroll = 0;
@@ -52,7 +52,9 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
   }
 
   private void initRecentsList() {
-    scroller = new Scroller(getContext());
+    scroller = new OverScroller(getContext());
+    setClipChildren(false);
+    setClipToPadding(false);
   }
 
   public void setOnItemClickListener(OnItemClickListener onItemClickListener) {
@@ -69,17 +71,19 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
 
   @Override protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
     super.onLayout(changed, left, top, right, bottom);
-    if (adapter == null || !changed) return;
+    Log.d("moro", "onLayout");
+    if (adapter == null) return;
     if (getChildCount() != adapter.getCount()) {
       initChildren();
     }
-
+    Log.d("moro", "Handling onLayout");
     childTouchRect = new Rect[getChildCount()];
     for (int i = 0; i < getChildCount(); i++) {
       getChildAt(i).layout(0, 0, getWidth() - getPaddingLeft() - getPaddingRight(),
-          getWidth() - getPaddingLeft() - getPaddingRight());
+          getHeight() - getPaddingTop() - getPaddingBottom());
       childTouchRect[i] = new Rect();
     }
+    scrollAllChildren();
   }
 
   private void initChildren() {
@@ -91,7 +95,7 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
         throw new IllegalArgumentException("You can only use CardView with " + getClass().getSimpleName());
       }
       card.addView(itemContent);
-      addView(card, i, generateDefaultLayoutParams());
+      addView(card, i);
       final int finalI = i;
       card.setOnClickListener(new OnClickListener() {
         @Override public void onClick(View view) {
@@ -103,37 +107,15 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
     }
   }
 
-  private void layoutChildren() {
-    int width = getWidth() - getPaddingLeft() - getPaddingRight();
-    int height = getHeight() - getPaddingTop() - getPaddingBottom();
-    for (int i = 0; i < getChildCount(); i++) {
-      float topSpace = height - width;
-      int y = (int) (topSpace * Math.pow(2, (i * width - scroll) / (float) width));
-      float scale = (float) (-Math.pow(2, -y / topSpace / 10.0f) + 19.0f / 10);
-      childTouchRect[i].set(getPaddingLeft(), y + getPaddingTop(),
-          (int) (scale * (getPaddingLeft() + getWidth() - getPaddingLeft() - getPaddingRight())),
-          (int) (scale * (y + getPaddingTop() + getWidth() - getPaddingLeft() - getPaddingRight())));
-      getChildAt(i).setTranslationX(getPaddingLeft());
-      getChildAt(i).setTranslationY(y + getPaddingTop());
-      getChildAt(i).setScaleX(scale);
-      getChildAt(i).setScaleY(scale);
-    }
-  }
-
   private int getMaxScroll() {
     return (getChildCount() - 1) * (getWidth() - getPaddingLeft() - getPaddingRight());
   }
 
-  @Override protected void dispatchDraw(@NonNull Canvas canvas) {
-    layoutChildren();
-    requestLayout();
-    super.dispatchDraw(canvas);
-    doScrolling();
-  }
-
   @Override public boolean dispatchTouchEvent(@NonNull MotionEvent event) {
+    Log.d("moro", "dispatchTouchEvent");
     if (gestureDetector.onTouchEvent(event)) {
       for (int i = getChildCount() - 1; i >= 0; i--) {
+        Log.d("moro", "dispatchTouchEvent, cancel for child " + i);
         MotionEvent e = MotionEvent.obtain(event);
         event.setAction(MotionEvent.ACTION_CANCEL);
         e.offsetLocation(-childTouchRect[i].left, -childTouchRect[i].top);
@@ -148,9 +130,15 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
 
     for (int i = getChildCount() - 1; i >= 0; i--) {
       if (childTouchRect[i].contains((int) event.getX(), (int) event.getY())) {
+        Log.d("moro", "dispatchTouchEvent, coords contain child " + i);
         MotionEvent e = MotionEvent.obtain(event);
         e.offsetLocation(-childTouchRect[i].left, -childTouchRect[i].top);
-        if (getChildAt(i).dispatchTouchEvent(e)) break;
+        if (getChildAt(i).dispatchTouchEvent(e)) {
+          Log.d("moro", "dispatchTouchEvent, child " + i + " consumed the event " + e);
+          break;
+        } else {
+          Log.d("moro", "dispatchTouchEvent, child " + i + " ignored the event " + e);
+        }
       }
     }
 
@@ -158,6 +146,7 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
   }
 
   @Override public boolean onDown(MotionEvent motionEvent) {
+    Log.d("moro", "onDown");
     return false;
   }
 
@@ -166,13 +155,15 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
   }
 
   @Override public boolean onSingleTapUp(MotionEvent event) {
-
+    Log.d("moro", "onSingleTapUp");
     return false;
   }
 
-  @Override public boolean onScroll(MotionEvent motionEvent, MotionEvent motionEvent2, float v, float v2) {
-    scroll = (int) Math.max(0, Math.min(scroll + v2, getMaxScroll()));
-    postInvalidate();
+  @Override
+  public boolean onScroll(MotionEvent motionEvent, MotionEvent motionEvent2, float distanceX, float distanceY) {
+    Log.d("moro", "onScroll");
+    scroll = (int) Math.max(0, Math.min(scroll + distanceY, getMaxScroll()));
+    scrollAllChildren();
     return true;
   }
 
@@ -180,21 +171,39 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
 
   }
 
-  void startScrolling(float initialVelocity) {
-    scroller.fling(0, scroll, 0, (int) initialVelocity, 0, 0, Integer.MIN_VALUE, Integer.MAX_VALUE);
-
-    postInvalidate();
+  @Override
+  public boolean onFling(MotionEvent motionEvent, MotionEvent motionEvent2, float velocityX, float velocityY) {
+    Log.d("moro", "onFling");
+    startScrolling(-velocityY);
+    return true;
   }
 
-  private void doScrolling() {
-    if (scroller.isFinished()) return;
+  void startScrolling(float initialVelocity) {
+    scroller.fling(0, scroll, 0, (int) initialVelocity, 0, 0, Integer.MIN_VALUE, Integer.MAX_VALUE);
+    postInvalidateOnAnimation();
+  }
 
-    boolean more = scroller.computeScrollOffset();
-    int y = scroller.getCurrY();
+  @Override public void computeScroll() {
+    Log.d("moro", "computeScroll");
+    if (scroller.computeScrollOffset()) {
+      scroll = Math.max(0, Math.min(scroller.getCurrY(), getMaxScroll()));
+      scrollAllChildren();
+    }
+  }
 
-    scroll = Math.max(0, Math.min(y, getMaxScroll()));
-
-    if (more) postInvalidate();
+  private void scrollAllChildren() {
+    int width = getWidth() - getPaddingLeft() - getPaddingRight();
+    int height = getHeight() - getPaddingTop() - getPaddingBottom();
+    float topSpace = height - width;
+    for (int i = 0; i < getChildCount(); i++) {
+      int y = (int) (topSpace * Math.pow(2, (i * width - scroll) / (float) width));
+      childTouchRect[i].set( //
+          getPaddingLeft(), //
+          y + getPaddingTop(), //
+          getPaddingLeft() + getWidth() - getPaddingLeft() - getPaddingRight(),
+          y + getPaddingTop() + getHeight() - getPaddingTop() - getPaddingBottom());
+      getChildAt(i).scrollTo(-getPaddingLeft(), -(y + getPaddingTop()));
+    }
   }
 
   boolean isFlinging() {
@@ -205,10 +214,5 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
     if (!scroller.isFinished()) {
       scroller.forceFinished(true);
     }
-  }
-
-  @Override public boolean onFling(MotionEvent motionEvent, MotionEvent motionEvent2, float v, float v2) {
-    startScrolling(-v2);
-    return true;
   }
 }
