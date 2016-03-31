@@ -46,7 +46,7 @@ public class RecentsActivity extends AppCompatActivity {
       }
 
       @Override public int getCount() {
-        return 15;
+        return 4;
       }
     };
     recents.setAdapter(adapter);
