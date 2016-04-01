@@ -1,29 +1,30 @@
 package com.moro.materialrecents;
 
+import android.animation.ValueAnimator;
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.os.Build;
 import android.support.annotation.NonNull;
-import android.support.v4.view.ViewCompat;
 import android.support.v7.widget.CardView;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
-import android.widget.OverScroller;
 
 /**
  * Created by Marcin on 2015-04-13.
  */
 public class RecentsList extends FrameLayout implements GestureDetector.OnGestureListener {
-  OverScroller scroller;
   RecentsAdapter adapter;
   GestureDetector gestureDetector;
   int scroll = 0;
   OnItemClickListener onItemClickListener;
+  ValueAnimator scrollBounceAnimator;
+  private int actionBarSize;
 
   public interface OnItemClickListener {
     void onItemClick(View view, int position);
@@ -51,9 +52,20 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
   }
 
   private void initRecentsList() {
-    scroller = new OverScroller(getContext());
     gestureDetector = new GestureDetector(getContext(), this);
     gestureDetector.setIsLongpressEnabled(false);
+    scrollBounceAnimator = ValueAnimator.ofInt(scroll, 0);
+    scrollBounceAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+      @Override public void onAnimationUpdate(final ValueAnimator animation) {
+        scroll = (Integer) animation.getAnimatedValue();
+        Log.d("moro", "onAnimationUpdate, scroll=" + scroll);
+        scrollAllChildren();
+      }
+    });
+    TypedValue value = new TypedValue();
+    if (getContext().getTheme().resolveAttribute(android.R.attr.actionBarSize, value, true)) {
+      actionBarSize = TypedValue.complexToDimensionPixelSize(value.data, getResources().getDisplayMetrics());
+    }
     setClipChildren(false);
     setClipToPadding(false);
   }
@@ -90,19 +102,6 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
         throw new IllegalArgumentException("You can only use CardView with " + getClass().getSimpleName());
       }
       final int finalI = i;
-      //new VerticalOverScrollBounceEffectDecorator(new IOverScrollDecoratorAdapter() {
-      //  @Override public View getView() {
-      //    return card;
-      //  }
-      //
-      //  @Override public boolean isInAbsoluteStart() {
-      //    return finalI == 0 || scroll;
-      //  }
-      //
-      //  @Override public boolean isInAbsoluteEnd() {
-      //    return false;
-      //  }
-      //});
       card.addView(itemContent);
       addView(card, i);
       itemContent.setOnClickListener(new OnClickListener() {
@@ -115,17 +114,24 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
     }
   }
 
-  private int getMaxScroll() {
-    return (getChildCount() - 1) * (getHeight() - getPaddingTop() - getPaddingBottom());
-  }
-
   @Override public boolean onInterceptTouchEvent(final MotionEvent event) {
     Log.d("moro", "onInterceptTouchEvent, action:" + event.getAction());
+    if (event.getAction() == MotionEvent.ACTION_DOWN) {
+      if (scrollBounceAnimator.isRunning()) {
+        Log.d("moro", "onTouchEvent, cancelling anim");
+        scrollBounceAnimator.cancel();
+        return true;
+      }
+    }
     return gestureDetector.onTouchEvent(event);
   }
 
   @Override public boolean onTouchEvent(@NonNull MotionEvent event) {
     Log.d("moro", "onTouchEvent, action:" + event.getAction());
+    if (event.getAction() == MotionEvent.ACTION_UP) {
+      scrollBounceAnimator.setIntValues(scroll, 0);
+      scrollBounceAnimator.start();
+    }
     boolean result = event.getAction() == MotionEvent.ACTION_DOWN || gestureDetector.onTouchEvent(event);
     Log.d("moro", "onTouchEvent, returning:" + result);
     return result;
@@ -133,8 +139,6 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
 
   @Override public boolean onDown(MotionEvent motionEvent) {
     Log.d("moro", "onDown");
-    forceFinished();
-    ViewCompat.postInvalidateOnAnimation(this);
     return false;
   }
 
@@ -149,8 +153,9 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
 
   @Override
   public boolean onScroll(MotionEvent motionEvent, MotionEvent motionEvent2, float distanceX, float distanceY) {
-    Log.d("moro", "onScroll");
-    scroll = (int) (scroll + distanceY);
+    Log.d("moro", "onScroll, distanceY=" + distanceY);
+    scroll = (int) Math.min(scroll + distanceY, getMaxScroll());
+    Log.d("moro", "onScroll, scroll=" + scroll);
     scrollAllChildren();
     return true;
   }
@@ -162,50 +167,24 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
   @Override
   public boolean onFling(MotionEvent motionEvent, MotionEvent motionEvent2, float velocityX, float velocityY) {
     Log.d("moro", "onFling");
-    forceFinished();
-    startScrolling(-velocityY * 2);
-    return true;
-  }
-
-  void startScrolling(float initialVelocity) {
-    scroller.fling(0, scroll, 0, (int) initialVelocity, 0, 0, Integer.MIN_VALUE, Integer.MAX_VALUE);
-    ViewCompat.postInvalidateOnAnimation(this);
-  }
-
-  @Override public void computeScroll() {
-    Log.d("moro", "computeScroll");
-    if (scroller.computeScrollOffset()) {
-      Log.i("moro", "computeScroll, currentY=" + scroller.getCurrY());
-      scroll = Math.max(0, Math.min(scroller.getCurrY(), getMaxScroll()));
-      scrollAllChildren();
-    }
+    return false;
   }
 
   private void scrollAllChildren() {
-    float min = scroll * 0.5f;
-    float max = scroll * 1f;
-    float step = 1 / adapter.getCount();
-    int width = getWidth();
-    int height = getHeight();
-    float topSpace = height - width;
+    float min = scroll * 0.1f;
+    float max = scroll * 0.4f;
+    float step = 1 / ((float) adapter.getCount());
     for (int i = 0; i < getChildCount(); i++) {
-      //int y = (int) (topSpace * Math.pow(2, (i * height - scroll) / (float) height));
-      float y = min + i * step * (max - min)
-          - (i * height / adapter.getCount());
-      Log.d("moro", "scrollAllChildren, child " + i + ", y=" + y);
+      float y = min + i * step * (max - min) - (i * getHeight() / adapter.getCount());
+      Log.d("moro", "scrollAllChildren, child " + i + ", y=" + (min + i * step * (max - min)) + ", fullY=" + y);
       getChildAt(i).scrollTo(0, (int) (y + getPaddingTop()));
     }
   }
 
-  boolean isFlinging() {
-    return !scroller.isFinished();
-  }
-
-  void forceFinished() {
-    Log.d("moro", "forceFinished");
-    if (!scroller.isFinished()) {
-      Log.d("moro", "forceFinished, Finishing scroller");
-      scroller.forceFinished(true);
-    }
+  private int getMaxScroll() {
+    return (int) (((getHeight() * adapter.getCount() - 1) / adapter.getCount()
+        - actionBarSize
+        - getPaddingTop()
+        - getPaddingBottom()) / 0.4f);
   }
 }
