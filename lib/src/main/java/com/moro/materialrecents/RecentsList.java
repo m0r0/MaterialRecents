@@ -80,6 +80,7 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
 
   public void setAdapter(RecentsAdapter adapter) {
     this.adapter = adapter;
+    initChildren();
   }
 
   @Override protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
