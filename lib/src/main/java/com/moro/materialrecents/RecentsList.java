@@ -25,6 +25,7 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
   OnItemClickListener onItemClickListener;
   ValueAnimator scrollBounceAnimator;
   private int actionBarSize;
+  private int cardOverlapLength;
 
   public interface OnItemClickListener {
     void onItemClick(View view, int position);
@@ -83,6 +84,11 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
     initChildren();
   }
 
+  public void setCardOverlapLength(final int cardOverlapLength) {
+    this.cardOverlapLength = cardOverlapLength;
+    scrollAllChildren();
+  }
+
   @Override protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
     super.onLayout(changed, left, top, right, bottom);
     Log.d("moro", "onLayout");
@@ -96,6 +102,7 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
 
   private void initChildren() {
     removeAllViews();
+    cardOverlapLength = getHeight() / adapter.getCount();
     for (int i = 0; i < adapter.getCount(); i++) {
       final ViewGroup card = new FrameLayout(getContext());
       final View itemContent = adapter.getView(this, i);
@@ -178,7 +185,7 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
     float max = scroll * 0.4f;
     float step = 1 / ((float) adapter.getCount());
     for (int i = 0; i < getChildCount(); i++) {
-      float y = min + i * step * (max - min) - (i * getHeight() / adapter.getCount());
+      float y = min + i * step * (max - min) - (i * cardOverlapLength);
       Log.d("moro", "scrollAllChildren, child " + i + ", y=" + (min + i * step * (max - min)) + ", fullY=" + y);
       getChildAt(i).scrollTo(0, (int) (y + getPaddingTop()));
     }
