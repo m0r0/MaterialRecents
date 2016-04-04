@@ -116,6 +116,7 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
 
   @Override public boolean onInterceptTouchEvent(final MotionEvent event) {
     Log.d("moro", "onInterceptTouchEvent, action:" + event.getAction());
+    if (adapter == null) return false;
     if (event.getAction() == MotionEvent.ACTION_DOWN) {
       if (scrollBounceAnimator.isRunning()) {
         Log.d("moro", "onTouchEvent, cancelling anim");
@@ -128,6 +129,7 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
 
   @Override public boolean onTouchEvent(@NonNull MotionEvent event) {
     Log.d("moro", "onTouchEvent, action:" + event.getAction());
+    if (adapter == null) return false;
     if (event.getAction() == MotionEvent.ACTION_UP) {
       scrollBounceAnimator.setIntValues(scroll, 0);
       scrollBounceAnimator.start();
