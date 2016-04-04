@@ -26,6 +26,7 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
   ValueAnimator scrollBounceAnimator;
   private int actionBarSize;
   private int cardOverlapLength;
+  private boolean isScrollingEnabled = true;
 
   public interface OnItemClickListener {
     void onItemClick(View view, int position);
@@ -89,6 +90,14 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
     scrollAllChildren();
   }
 
+  public void setScrollingEnabled(final boolean scrollingEnabled) {
+    isScrollingEnabled = scrollingEnabled;
+  }
+
+  public boolean isScrollingEnabled() {
+    return isScrollingEnabled;
+  }
+
   @Override protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
     super.onLayout(changed, left, top, right, bottom);
     Log.d("moro", "onLayout");
@@ -132,7 +141,7 @@ public class RecentsList extends FrameLayout implements GestureDetector.OnGestur
         return true;
       }
     }
-    return gestureDetector.onTouchEvent(event);
+    return isScrollingEnabled && gestureDetector.onTouchEvent(event);
   }
 
   @Override public boolean onTouchEvent(@NonNull MotionEvent event) {
